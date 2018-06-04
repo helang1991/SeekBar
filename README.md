@@ -5,8 +5,4 @@ init
 
 ![image](https://github.com/helang1991/SeekBar/blob/master/gif/20180529213933878.gif)
 
-![](https://github.com/helang1991/SeekBar/blob/master/gif/20180529213933878.gif)
-
-
-![](https://minirefresh.github.io/minirefresh/staticresource/screenshoot/base_multi.gif)
 
