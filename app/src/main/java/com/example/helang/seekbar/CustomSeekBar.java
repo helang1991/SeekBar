@@ -2,15 +2,15 @@ package com.example.helang.seekbar;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -27,22 +27,29 @@ import io.reactivex.functions.Consumer;
  */
 public class CustomSeekBar extends View {
     private static final String TAG = "CustomSeekBar";
-    private static final int radius = 65;//中间圆形进度条的半径
-    private static final int thumbSize = 200;
+    private int radius = 26;
+    private int thumbSize = 110;
+    private int voiceHeight;
+    private int voiceWidth;
 
-    private int backgroundLineSize = 10;//背景线的宽度
-    private int foregroundLineSize = 18;//进度的宽度
+    private int backgroundLineSize = 4;//背景线的宽度
+    private int foregroundLineSize = 8;//进度的宽度
 
     private int lineSize;//整条背景线的长度
 
     private float touchY;
-    private Bitmap thumbBitmap;
+    private Bitmap thumbBitmap;//拖动的轮子图片
+    private Bitmap voiceBitmap;//中间那个音量图片
 
     private Paint paint;
     private Paint circlePaint;//绘制进度条的paint
 
     private RectF backgroundLineRect = new RectF();//背景矩形
     private RectF foregroundLineRect = new RectF();//进度矩形
+
+    private RectF ovalRectF;//圆的外接正方形
+
+    private Matrix matrix  = new Matrix();//为bitmap旋转
 
     private float currentDegrees = 0;//当前的进度，百分比例，不带百分号
 
@@ -62,6 +69,7 @@ public class CustomSeekBar extends View {
 
     public CustomSeekBar(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        initRect();
         initBitmap();
         initPaint();
     }
@@ -70,7 +78,12 @@ public class CustomSeekBar extends View {
      * init bitmap
      */
     private void initBitmap(){
-        thumbBitmap = drawableToBitmap(thumbSize,getResources().getDrawable(R.drawable.circle));
+        voiceBitmap = BitmapFactory.decodeResource(getResources(),R.mipmap.voice_bg);
+        thumbBitmap = BitmapFactory.decodeResource(getResources(), R.mipmap.circle_bg);
+        thumbSize = thumbBitmap.getHeight();
+        voiceHeight = voiceBitmap.getHeight();
+        voiceWidth = voiceBitmap.getWidth();
+        radius = voiceWidth/2+10;//圆的半径比中间那个音量图标的半径大一点点
     }
 
     /**
@@ -81,16 +94,20 @@ public class CustomSeekBar extends View {
         paint.setStyle(Paint.Style.FILL);
         paint.setTextSize(10);
 
-        //初始化圆形进度条的Paint
         circlePaint = new Paint();
         circlePaint.setAntiAlias(true); // 抗锯齿
         circlePaint.setDither(true); // 防抖动
-        circlePaint.setStrokeWidth(10);
+        circlePaint.setStrokeWidth(2);//线的宽度
         circlePaint.setShader(null); // 清除上一次的shader
         circlePaint.setStyle(Paint.Style.STROKE); // 设置绘制的圆为空心
         circlePaint.setShadowLayer(10, 10, 10, Color.RED);
-        circlePaint.setColor(Color.BLUE); // 设置圆弧的颜色
+        circlePaint.setColor(Color.WHITE); // 设置圆弧的颜色
         circlePaint.setStrokeCap(Paint.Cap.ROUND); // 把每段圆弧改成圆角的
+    }
+
+    private void initRect(){
+        ovalRectF  = new RectF(thumbSize/2-radius, thumbSize/2-radius,
+                thumbSize/2+radius, thumbSize/2+radius); //
     }
 
 
@@ -117,10 +134,10 @@ public class CustomSeekBar extends View {
      * @param canvas
      */
     private void drawCircleProgress(Canvas canvas){
-        RectF oval = new RectF(thumbSize/2-radius, thumbSize/2-radius,
-                thumbSize/2+radius, thumbSize/2+radius); // 圆的外接正方形
+        ovalRectF.set(thumbSize/2-radius, thumbSize/2-radius,
+                thumbSize/2+radius, thumbSize/2+radius);
         float alphaAngle = currentDegrees * 360.0f / 100 * 1.0f; // 计算每次画圆弧时扫过的角度，这里计算要注意分母要转为float类型，否则alphaAngle永远为0
-        canvas.drawArc(oval, -90, alphaAngle, false, circlePaint);
+        canvas.drawArc(ovalRectF, -90, alphaAngle, false, circlePaint);
     }
 
     /**
@@ -128,11 +145,11 @@ public class CustomSeekBar extends View {
      * @param canvas
      */
     private void drawThumb(Canvas canvas){
-        //添加旋转,Matrix是Bitmap旋转的关键，用于bitmap一些补间动画的操作
+        //添加旋转
         canvas.translate((getWidth()-thumbSize)/2,(100-currentDegrees)/100*lineSize);
-        Matrix matrix  = new Matrix();
         matrix.setRotate(currentDegrees*10,thumbSize/2,thumbSize/2);
         canvas.drawBitmap(thumbBitmap,matrix,null);//旋转背景
+        canvas.drawBitmap(voiceBitmap, (thumbSize-voiceWidth)/2, (thumbSize-voiceHeight)/2, null);//跟随背景
     }
 
     /**
@@ -141,27 +158,19 @@ public class CustomSeekBar extends View {
      */
     private void drawLine(Canvas canvas){
         //绘制背景线
-        backgroundLineRect.set((getWidth()-backgroundLineSize)/2,thumbSize/2,
+        backgroundLineRect.set((getWidth()-backgroundLineSize)/2,100,
                 (getWidth()+backgroundLineSize)/2, getParentHeight()-thumbSize/2);
-        lineSize = getParentHeight() - thumbSize;//去掉被thumb挡住的一部分长度
+        lineSize = getParentHeight()-thumbSize/2 - 100;
         paint.setColor(Color.rgb(61,82,89));
-        canvas.drawRoundRect(backgroundLineRect, backgroundLineSize/2, backgroundLineSize/2, paint);
-
+        canvas.drawRoundRect(backgroundLineRect, 2, 2, paint);
 
         //绘制进度线
-        paint.setColor(Color.rgb(90,189,220));//进度线的颜色
-        foregroundLineRect.set((getWidth()-foregroundLineSize)/2,
-                (getParentHeight()-thumbSize)*(100-currentDegrees)/100+thumbSize/2,
+        paint.setColor(Color.rgb(90,189,220));
+        foregroundLineRect.set((getWidth()-foregroundLineSize)/2,(getParentHeight()-100)*(100-currentDegrees)/100-thumbSize/2+100,
                 (getWidth()+foregroundLineSize)/2,getParentHeight()-thumbSize/2);
-        canvas.drawRoundRect(foregroundLineRect,foregroundLineSize/2,foregroundLineSize/2,paint);
+        canvas.drawRoundRect(foregroundLineRect,4,4,paint);
     }
 
-
-
-    /**
-     * get ParentHeight
-     * @return
-     */
     private int getParentHeight(){
         return getHeight();
     }
@@ -177,23 +186,25 @@ public class CustomSeekBar extends View {
             return true;
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                touchY = event.getRawY();//记录开始的Y值
+                touchY = event.getRawY();
                 break;
             case MotionEvent.ACTION_MOVE:
-                currentDegrees += (touchY-event.getRawY())*1f/(getParentHeight())*100.0f;//当前进度值（100为满）
-                if (currentDegrees > 100){//超出去的不计算，默认为100
+                currentDegrees += (touchY-event.getRawY())*1f/(getParentHeight())*100.0f;
+                if (currentDegrees > 100){
                     currentDegrees = 100;
                 }
-                if (currentDegrees<0){//超出去的不计算，默认为0
+                if (currentDegrees<0){
                     currentDegrees = 0;
                 }
 
-                if (observableEmitter != null){//使用背压发送
+
+                if (observableEmitter != null){
                     observableEmitter.onNext(1);
-                }else {//直接发送
-                    sendProgress();
                 }
 
+                if (onProgressListener != null){
+                    onProgressListener.onProgressNumber(currentDegrees);
+                }
                 touchY = event.getRawY();
                 invalidate();
                 break;
@@ -212,22 +223,24 @@ public class CustomSeekBar extends View {
 
 
     /**
-     *增加背压，防止发射拖动的事件过快,导致内存溢出
+     *使用addBackPressure,因为拖动的事件过快，会导致在处理某些较为耗时的操作时，可能会发生内存泄漏，
+     *这里使用RxJava的背压操作，主动降低被观察者的发送频率。当然这个要结合你实际的业务需求
      */
-    public void addBackPressure(){
+    public void addbackPressure(){
         Observable.create(new ObservableOnSubscribe<Integer>() {
             @Override
             public void subscribe(ObservableEmitter<Integer> emitter) throws Exception {
                 observableEmitter = emitter;
             }
-        }).sample(500, TimeUnit.MILLISECONDS)
-        .observeOn(AndroidSchedulers.mainThread())
-        .subscribe(new Consumer<Integer>() {
-            @Override
-            public void accept(Integer integer) throws Exception {
-                sendProgress();
-            }
-        });
+        }).sample(500,TimeUnit.MILLISECONDS)
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Consumer<Integer>() {
+                    @Override
+                    public void accept(Integer integer) throws Exception {
+                        Log.e(TAG,"accept::"+integer);
+                        sendProgress();
+                    }
+                });
 
 
     }
@@ -241,10 +254,6 @@ public class CustomSeekBar extends View {
         }
     }
 
-    /**
-     * 设置当前进度
-     * @param currentDegrees
-     */
     public void setCurrentDegrees(float currentDegrees){
         this.currentDegrees = currentDegrees;
         invalidate();
@@ -253,31 +262,7 @@ public class CustomSeekBar extends View {
 
     public interface OnProgressListener{
         void onProgress(float progress);
-    }
-
-    /**
-     *  make a drawable to a bitmap
-     * @param drawable drawable you want convert
-     * @return converted bitmap
-     */
-    private Bitmap drawableToBitmap(int size, Drawable drawable) {
-        Bitmap bitmap = null;
-        if (drawable instanceof BitmapDrawable) {
-            BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
-            bitmap = bitmapDrawable.getBitmap();
-            if (bitmap != null && bitmap.getHeight() > 0) {
-                Matrix matrix = new Matrix();
-                float scaleHeight = size * 1.0f / bitmapDrawable.getIntrinsicHeight();
-                matrix.postScale(scaleHeight, scaleHeight);
-                bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-                return bitmap;
-            }
-        }
-        bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bitmap);
-        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
-        drawable.draw(canvas);
-        return bitmap;
+        void onProgressNumber(float progress);
     }
 
 }
